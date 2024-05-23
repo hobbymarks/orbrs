@@ -2,8 +2,7 @@ use cgmath::{prelude::*, Rad};
 use image::{GrayImage, ImageError, Rgba};
 use imageproc::drawing::draw_line_segment_mut;
 
-use crate::common;
-use common::*;
+use crate::common::{Matchable, Point};
 
 // Consts
 const DEFAULT_FAST_THRESHOLD: i32 = 50;
@@ -135,9 +134,9 @@ pub fn fast(
             let moment = moment_centroid(img, &point, None);
             fast_keypoint_matches.push(FastKeypoint {
                 location: point,
-                score: score,
+                score,
                 nms_dist: 0,
-                moment: moment,
+                moment,
             });
         }
     }
@@ -195,11 +194,11 @@ fn moment_centroid(img: &GrayImage, point: &Point, moment_radius: Option<u32>) -
 
     let (mx, my) = ((p_x / p_m), (p_y / p_m));
 
-    let x_diff = (point.0 as f64 - mx) as f64;
-    let y_diff = (point.1 as f64 - my) as f64;
+    let x_diff = point.0 as f64 - mx;
+    let y_diff = point.1 as f64 - my;
 
     Moment {
-        centroid: point.clone(),
+        centroid: *point,
         moment: (mx.round() as i32, my.round() as i32),
         rotation: y_diff.atan2(x_diff),
     }

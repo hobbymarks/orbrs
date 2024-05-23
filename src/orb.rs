@@ -1,14 +1,13 @@
 use bitvector::BitVector;
-use cgmath::{prelude::*, Deg, Rad};
-use image::imageops::blur;
-use image::{
-    DynamicImage, GenericImageView, GrayImage, ImageBuffer, ImageError, ImageFormat, RgbImage,
-};
+use cgmath::{Angle, Deg, Rad};
+use image::{imageops::blur, DynamicImage, GenericImageView, GrayImage, ImageBuffer, ImageError};
 use std::cmp::{max, min};
 
-use crate::{brief, common, fast};
-use common::*;
-use fast::FastKeypoint;
+use crate::{
+    brief,
+    common::{adaptive_nonmax_suppression, Matchable},
+    fast::{self, FastKeypoint},
+};
 
 // Consts
 const DEFAULT_BRIEF_LENGTH: usize = 256;
@@ -40,16 +39,16 @@ unsafe fn sobel(img: &image::GrayImage, filter: &SobelFilter, x: i32, y: i32) ->
             sobel += px as i32 * *k;
         }
     }
-    min(sobel.abs() as u8, u8::MAX)
+    min(sobel.unsigned_abs() as u8, u8::MAX)
 }
 
-fn create_sobel_image(img: &GrayImage) -> GrayImage {
+pub fn create_sobel_image(img: &GrayImage) -> GrayImage {
     let mut new_image: GrayImage = ImageBuffer::new(img.width(), img.height());
 
     for y in 1..img.height() - 1 {
         for x in 1..img.width() - 1 {
-            let mut px = new_image.get_pixel_mut(x, y);
-            px.0[0] = unsafe { sobel(img, &SOBEL_Y, x as i32, y as i32) as u8 };
+            let px = new_image.get_pixel_mut(x, y);
+            px.0[0] = unsafe { sobel(img, &SOBEL_Y, x as i32, y as i32) };
         }
     }
 
@@ -96,7 +95,7 @@ fn round_angle(angle: i32, increment: i32) -> i32 {
 
 pub fn brief(
     blurred_img: &GrayImage,
-    vec: &Vec<FastKeypoint>,
+    vec: &[FastKeypoint],
     brief_length: Option<usize>,
 ) -> Vec<Brief> {
     let brief_length = brief_length.unwrap_or(DEFAULT_BRIEF_LENGTH);
@@ -104,9 +103,9 @@ pub fn brief(
     let height: i32 = blurred_img.height() as i32;
 
     // copy offsets into current frame on stack
-    let offsets = brief::OFFSETS.clone();
+    let offsets = brief::OFFSETS;
 
-    vec.into_iter()
+    vec.iter()
         .map(|k| {
             let rotation = Deg::from(Rad(k.moment.rotation)).0.round() as i32;
             let rounded_angle = Deg(round_angle(rotation, 12) as f32);
@@ -159,7 +158,7 @@ pub fn brief(
 //
 
 pub fn orb(img: &DynamicImage, n: usize) -> Result<Vec<Brief>, ImageError> {
-    let gray_img = img.to_luma();
+    let gray_img = img.to_luma8();
 
     let mut keypoints: Vec<FastKeypoint> = fast::fast(&gray_img, None, None)?;
 
