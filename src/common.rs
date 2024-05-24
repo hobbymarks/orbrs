@@ -1,4 +1,5 @@
 use bitvector::BitVector;
+use std::cmp::Ordering;
 
 pub type Point = (i32, i32);
 pub type IndexMatch = (usize, usize);
@@ -39,33 +40,34 @@ where
     index_vec
 }
 
-pub fn adaptive_nonmax_suppression<T>(vec: &mut [T], n: usize) -> Vec<T>
+pub fn adaptive_nonmax_suppression<T>(vec_desc: &mut [T], n: usize) -> Vec<T>
 where
     T: Matchable,
     T: Copy,
 {
-    assert!(n <= vec.len());
+    if n == 0 {
+        return Vec::new();
+    }
 
-    let mut maximal_keypoints: Vec<T> = vec![];
-    for i in 1..vec.len() - 1 {
-        let d1 = &vec[i];
-        let mut min_dist: usize = usize::MAX;
-        let mut min_idx: usize = 0;
+    assert!(n <= vec_desc.len());
 
-        for (j, e) in vec.iter().enumerate().take(i) {
-            let dist = e.distance(d1);
-            if dist < min_dist {
-                min_dist = dist;
-                min_idx = j;
+    let mut suppression_radius = vec![usize::MAX; vec_desc.len()];
+
+    for i in 1..vec_desc.len() {
+        for j in 0..i {
+            let dist = vec_desc[i].distance(&vec_desc[j]);
+            if dist < suppression_radius[i] {
+                suppression_radius[i] = dist;
             }
         }
-
-        vec.swap(i, min_idx);
     }
 
-    for e in vec.iter().take(n) {
-        maximal_keypoints.push(*e);
-    }
+    let mut vec_with_radius: Vec<_> = vec_desc.iter_mut().zip(suppression_radius).collect();
+    vec_with_radius.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
 
-    maximal_keypoints
+    vec_with_radius
+        .into_iter()
+        .take(n)
+        .map(|(kp, _)| *kp)
+        .collect()
 }
